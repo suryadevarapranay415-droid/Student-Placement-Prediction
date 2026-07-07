@@ -1,209 +1,188 @@
+
+# NOTE:
+# This is a starter professional Streamlit app.
+# Place student_placement_dataset_100.csv in the same folder.
+
 import streamlit as st
 import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.ensemble import RandomForestClassifier
 
-# -----------------------------
-# Load Dataset
-# -----------------------------
+st.set_page_config(page_title="Student Placement Prediction",page_icon="🎓",layout="wide")
 
 @st.cache_resource
 def train_model():
-
     df = pd.read_csv("student_placement_dataset_100.csv")
-
-    X = df.drop(columns=["Student_ID", "Placed"])
+    X = df.drop(columns=["Student_ID","Placed"])
     y = df["Placed"]
 
-    categorical_features = [
-        "Primary_Skill",
-        "Certification_Level"
-    ]
+    cat=["Primary_Skill","Certification_Level"]
+    num=["CGPA","Skill_Count","Internships","Certifications",
+         "Aptitude_Score","Communication_Score","Projects"]
 
-    numeric_features = [
-        "CGPA",
-        "Skill_Count",
-        "Internships",
-        "Certifications",
-        "Aptitude_Score",
-        "Communication_Score",
-        "Projects"
-    ]
-
-    preprocessor = ColumnTransformer(
-        transformers=[
-            (
-                "cat",
-                OneHotEncoder(handle_unknown="ignore"),
-                categorical_features
-            ),
-            (
-                "num",
-                "passthrough",
-                numeric_features
-            )
-        ]
-    )
-
-    model = Pipeline([
-        ("preprocessor", preprocessor),
-        ("classifier", RandomForestClassifier(
-            n_estimators=100,
-            random_state=42
-        ))
+    pre=ColumnTransformer([
+        ("cat",OneHotEncoder(handle_unknown="ignore"),cat),
+        ("num","passthrough",num)
     ])
 
-    model.fit(X, y)
+    model=Pipeline([
+        ("preprocessor",pre),
+        ("classifier",RandomForestClassifier(n_estimators=100,random_state=42))
+    ])
 
-    return model
+    model.fit(X,y)
+    return model,df
 
-model = train_model()
+model,df=train_model()
 
-# -----------------------------
-# Streamlit UI
-# -----------------------------
+st.sidebar.title("🎓 Navigation")
+page=st.sidebar.radio("Menu",["Home","Dataset Analysis","Prediction","About"])
 
-st.set_page_config(
-    page_title="Student Placement Prediction",
-    page_icon="🎓",
-    layout="centered"
-)
+if page=="Home":
+    st.title("🎓 Student Placement Prediction Dashboard")
+    c1,c2,c3,c4=st.columns(4)
+    c1.metric("Students",len(df))
+    c2.metric("Placed",int(df["Placed"].sum()))
+    c3.metric("Average CGPA",round(df["CGPA"].mean(),2))
+    c4.metric("Placement %",round(df["Placed"].mean()*100,1))
 
-st.title("🎓 Student Placement Prediction")
+    col1,col2=st.columns(2)
 
-st.write(
-    "Fill in the student's academic and skill details to predict placement."
-)
+    with col1:
+        fig,ax=plt.subplots()
+        df["Placed"].value_counts().plot(kind="pie",autopct="%1.1f%%",
+                                         labels=["Placed","Not Placed"],ax=ax)
+        ax.set_ylabel("")
+        st.pyplot(fig)
 
-st.divider()
+    with col2:
+        fig,ax=plt.subplots()
+        sns.histplot(df["CGPA"],kde=True,ax=ax)
+        st.pyplot(fig)
 
-# -----------------------------
-# Input Fields
-# -----------------------------
+if page=="Dataset Analysis":
+    st.title("📊 Dataset Analysis")
 
-cgpa = st.slider(
-    "CGPA",
-    5.0,
-    10.0,
-    7.5,
-    0.1
-)
+    fig,ax=plt.subplots(figsize=(8,4))
+    sns.countplot(data=df,x="Primary_Skill")
+    plt.xticks(rotation=45)
+    st.pyplot(fig)
 
-primary_skill = st.selectbox(
-    "Primary Skill",
-    [
-        "Python",
-        "Java",
-        "C++",
-        "SQL",
-        "Machine Learning",
-        "Web Development",
-        "Data Structures",
-        "Cloud",
-        "Power BI",
-        "Android"
-    ]
-)
+    fig,ax=plt.subplots(figsize=(8,5))
+    sns.heatmap(df.corr(numeric_only=True),annot=True,cmap="coolwarm")
+    st.pyplot(fig)
 
-skill_count = st.slider(
-    "Number of Skills",
-    1,
-    10,
-    5
-)
+    fig,ax=plt.subplots(figsize=(8,4))
+    sns.countplot(data=df,x="Internships",hue="Placed")
+    st.pyplot(fig)
 
-internships = st.slider(
-    "Internships",
-    0,
-    5,
-    1
-)
+    fig,ax=plt.subplots(figsize=(8,4))
+    sns.boxplot(data=df,x="Placed",y="CGPA")
+    st.pyplot(fig)
 
-certifications = st.slider(
-    "Certifications",
-    0,
-    10,
-    2
-)
+if page=="Prediction":
+    st.title("🤖 Placement Prediction")
 
-certification_level = st.selectbox(
-    "Certification Level",
-    [
-        "None",
-        "Basic",
-        "Intermediate",
-        "Advanced"
-    ]
-)
+    col1,col2=st.columns(2)
 
-aptitude_score = st.slider(
-    "Aptitude Score",
-    0,
-    100,
-    70
-)
+    with col1:
+        cgpa=st.slider("CGPA",5.0,10.0,7.5)
+        skill=st.selectbox("Primary Skill",
+        ["Python","Java","C++","SQL","Machine Learning","Web Development",
+        "Data Structures","Cloud","Power BI","Android"])
+        skill_count=st.slider("Skill Count",1,10,5)
+        internships=st.slider("Internships",0,5,1)
 
-communication_score = st.slider(
-    "Communication Score",
-    0,
-    100,
-    70
-)
+    with col2:
+        certifications=st.slider("Certifications",0,10,2)
+        cert_level=st.selectbox("Certification Level",
+        ["None","Basic","Intermediate","Advanced"])
+        aptitude=st.slider("Aptitude Score",0,100,70)
+        communication=st.slider("Communication Score",0,100,70)
+        projects=st.slider("Projects",0,10,3)
 
-projects = st.slider(
-    "Projects Completed",
-    0,
-    10,
-    3
-)
+    if st.button("Predict"):
+        sample=pd.DataFrame({
+            "CGPA":[cgpa],
+            "Primary_Skill":[skill],
+            "Skill_Count":[skill_count],
+            "Internships":[internships],
+            "Certifications":[certifications],
+            "Certification_Level":[cert_level],
+            "Aptitude_Score":[aptitude],
+            "Communication_Score":[communication],
+            "Projects":[projects]
+        })
 
-st.divider()
+        pred=model.predict(sample)[0]
+        prob=max(model.predict_proba(sample)[0])*100
 
-# -----------------------------
-# Prediction
-# -----------------------------
+        if pred==1:
+            st.success("🎉 Likely to be Placed")
+            st.balloons()
+        else:
+            st.error("❌ Less Likely to be Placed")
 
-if st.button("Predict Placement", use_container_width=True):
+        st.metric("Confidence",f"{prob:.2f}%")
+        st.progress(prob/100)
 
-    sample = pd.DataFrame({
+        score=((cgpa/10)*30+(skill_count/10)*20+(internships/5)*15+
+               (certifications/10)*10+(aptitude/100)*15+
+               (communication/100)*10)
+        st.metric("Profile Score",f"{score:.1f}/100")
 
-        "CGPA":[cgpa],
-        "Primary_Skill":[primary_skill],
-        "Skill_Count":[skill_count],
-        "Internships":[internships],
-        "Certifications":[certifications],
-        "Certification_Level":[certification_level],
-        "Aptitude_Score":[aptitude_score],
-        "Communication_Score":[communication_score],
-        "Projects":[projects]
+        st.subheader("📌 Recommendations")
+        rec=[]
 
-    })
+        if cgpa<7.5:
+            rec.append("Improve your CGPA above 7.5.")
+        if internships==0:
+            rec.append("Complete at least one internship.")
+        if certifications<2:
+            rec.append("Earn more certifications.")
+        if aptitude<70:
+            rec.append("Practice aptitude daily.")
+        if communication<70:
+            rec.append("Improve communication skills.")
+        if projects<3:
+            rec.append("Build more real-world projects.")
+        if skill_count<4:
+            rec.append("Learn more technical skills.")
 
-    prediction = model.predict(sample)[0]
-    probability = model.predict_proba(sample)[0]
+        if rec:
+            for r in rec:
+                st.write("✅",r)
+        else:
+            st.success("Excellent profile! Keep preparing for interviews.")
 
-    confidence = max(probability) * 100
+        st.subheader("💼 Suggested Roles")
+        roles={
+            "Python":["Python Developer","Backend Developer","Data Analyst"],
+            "Machine Learning":["ML Engineer","AI Engineer","Data Scientist"],
+            "SQL":["Database Developer","Data Analyst"],
+            "Web Development":["Full Stack Developer","Frontend Developer"]
+        }
 
-    st.divider()
+        for role in roles.get(skill,["Software Engineer","Graduate Trainee"]):
+            st.write("•",role)
 
-    if prediction == 1:
+if page=="About":
+    st.title("About")
+    st.write("""
+    ### Student Placement Prediction using Machine Learning
 
-        st.success("🎉 Congratulations! The student is likely to be PLACED.")
+    **Algorithm:** Random Forest Classifier
 
-    else:
-
-        st.error("❌ The student is likely to NOT be placed.")
-
-    st.metric(
-        "Prediction Confidence",
-        f"{confidence:.2f}%"
-    )
-
-    st.progress(confidence / 100)
-
-    st.subheader("Student Details")
-
-    st.dataframe(sample, use_container_width=True)
+    **Technologies**
+    - Python
+    - Pandas
+    - Scikit-learn
+    - Streamlit
+    - Matplotlib
+    - Seaborn
+    """)
