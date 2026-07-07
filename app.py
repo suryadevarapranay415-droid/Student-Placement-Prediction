@@ -1,16 +1,70 @@
 import streamlit as st
 import pandas as pd
-import joblib
 
-# ------------------------
-# Load Model
-# ------------------------
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.ensemble import RandomForestClassifier
 
-model = joblib.load("placement_model.pkl")
+# -----------------------------
+# Load Dataset
+# -----------------------------
 
-# ------------------------
-# Page Title
-# ------------------------
+@st.cache_resource
+def train_model():
+
+    df = pd.read_csv("student_placement_dataset_100.csv")
+
+    X = df.drop(columns=["Student_ID", "Placed"])
+    y = df["Placed"]
+
+    categorical_features = [
+        "Primary_Skill",
+        "Certification_Level"
+    ]
+
+    numeric_features = [
+        "CGPA",
+        "Skill_Count",
+        "Internships",
+        "Certifications",
+        "Aptitude_Score",
+        "Communication_Score",
+        "Projects"
+    ]
+
+    preprocessor = ColumnTransformer(
+        transformers=[
+            (
+                "cat",
+                OneHotEncoder(handle_unknown="ignore"),
+                categorical_features
+            ),
+            (
+                "num",
+                "passthrough",
+                numeric_features
+            )
+        ]
+    )
+
+    model = Pipeline([
+        ("preprocessor", preprocessor),
+        ("classifier", RandomForestClassifier(
+            n_estimators=100,
+            random_state=42
+        ))
+    ])
+
+    model.fit(X, y)
+
+    return model
+
+model = train_model()
+
+# -----------------------------
+# Streamlit UI
+# -----------------------------
 
 st.set_page_config(
     page_title="Student Placement Prediction",
@@ -20,11 +74,15 @@ st.set_page_config(
 
 st.title("🎓 Student Placement Prediction")
 
-st.write("Enter the student details below.")
+st.write(
+    "Fill in the student's academic and skill details to predict placement."
+)
 
-# ------------------------
-# Inputs
-# ------------------------
+st.divider()
+
+# -----------------------------
+# Input Fields
+# -----------------------------
 
 cgpa = st.slider(
     "CGPA",
@@ -54,7 +112,7 @@ skill_count = st.slider(
     "Number of Skills",
     1,
     10,
-    4
+    5
 )
 
 internships = st.slider(
@@ -81,14 +139,14 @@ certification_level = st.selectbox(
     ]
 )
 
-aptitude = st.slider(
+aptitude_score = st.slider(
     "Aptitude Score",
     0,
     100,
     70
 )
 
-communication = st.slider(
+communication_score = st.slider(
     "Communication Score",
     0,
     100,
@@ -102,13 +160,15 @@ projects = st.slider(
     3
 )
 
-# ------------------------
+st.divider()
+
+# -----------------------------
 # Prediction
-# ------------------------
+# -----------------------------
 
-if st.button("Predict Placement"):
+if st.button("Predict Placement", use_container_width=True):
 
-    student = pd.DataFrame({
+    sample = pd.DataFrame({
 
         "CGPA":[cgpa],
         "Primary_Skill":[primary_skill],
@@ -116,36 +176,34 @@ if st.button("Predict Placement"):
         "Internships":[internships],
         "Certifications":[certifications],
         "Certification_Level":[certification_level],
-        "Aptitude_Score":[aptitude],
-        "Communication_Score":[communication],
+        "Aptitude_Score":[aptitude_score],
+        "Communication_Score":[communication_score],
         "Projects":[projects]
 
     })
 
-    prediction = model.predict(student)
+    prediction = model.predict(sample)[0]
+    probability = model.predict_proba(sample)[0]
 
-    probability = model.predict_proba(student)
+    confidence = max(probability) * 100
 
-    confidence = probability[0][prediction[0]] * 100
+    st.divider()
 
-    st.write("---")
+    if prediction == 1:
 
-    if prediction[0] == 1:
-
-        st.success("🎉 Student is likely to get PLACED")
+        st.success("🎉 Congratulations! The student is likely to be PLACED.")
 
     else:
 
-        st.error("❌ Student is likely to NOT get placed")
+        st.error("❌ The student is likely to NOT be placed.")
 
-    st.subheader("Prediction Confidence")
+    st.metric(
+        "Prediction Confidence",
+        f"{confidence:.2f}%"
+    )
 
-    st.progress(int(confidence))
+    st.progress(confidence / 100)
 
-    st.write(f"Confidence : **{confidence:.2f}%**")
+    st.subheader("Student Details")
 
-    st.write("---")
-
-    st.subheader("Entered Details")
-
-    st.dataframe(student)
+    st.dataframe(sample, use_container_width=True)
